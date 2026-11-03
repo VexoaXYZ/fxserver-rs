@@ -84,6 +84,39 @@ Caveats, stated plainly:
   rests on the byte-identical output above and a port of FXServer's own
   freshness rules.
 
+## Memory: what FXServer's RAM number actually is
+
+`fxs memmap <pid>` reads a running FXServer's address space without writing
+to it or injecting anything (`VirtualQueryEx`, `QueryWorkingSetEx`,
+`ReadProcessMemory`). `fxs peek <pid> <addr>` summarizes one block.
+
+Live Rivo server (28 resources started, 156 scanned, idle, no players):
+
+| | Committed | Physically resident |
+|---|---|---|
+| Private memory, total | 887 MiB | 101 MiB |
+| NT heap (C++ objects, strings; 26 segments) | 232 MiB | 40 MiB |
+| Other private (pools, script runtimes, stacks) | 655 MiB | 61 MiB |
+| One 128 MiB block (contains event/state bag names, likely a net buffer, UNCONFIRMED) | 128 MiB | 3.9 MiB |
+| Four 32 MiB blocks | 128 MiB | 4 MiB total |
+| Process working set | | 124 MB |
+
+What this means:
+- The "908 MB private bytes" figure is mostly commit charge for
+  preallocated, never-touched buffers. Real physical use is ~100 MiB
+  private plus shared images. Commit charge still matters on a VPS with a
+  small pagefile (Windows) or strict overcommit (Linux).
+- The heap holds parsed manifest metadata for **every scanned resource**,
+  started or not: one `std::string` key per entry (`client_script`,
+  `server_script`, `data_file` repeated hundreds of times). Keeping unused
+  resources out of `resources/` reduces it.
+- Lua resources each get their own rpmalloc heap on Windows; Node (`libnode`,
+  86 MiB image) loads for any JS resource and Mono for any C# resource
+  (here vMenu). Each runtime has a fixed cost even for one small resource.
+- "Resident" excludes pages Windows trimmed to standby, so it is a lower
+  bound on touched memory. Attribution of the large blocks to specific
+  FXServer code needs symbols and was not done.
+
 ## Using it
 
 ```bat

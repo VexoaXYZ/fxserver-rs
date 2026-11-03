@@ -487,6 +487,7 @@ dependencies = [
  "fxs-assets",
  "fxs-fileserver",
  "fxs-manifest",
+ "fxs-probe",
  "fxs-scan",
  "hex",
  "rayon",
@@ -545,6 +546,14 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "fxs-probe"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

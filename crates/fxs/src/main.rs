@@ -64,6 +64,21 @@ enum Cmd {
         /// Public URL of `fxs serve`, as clients will reach it
         url: String,
     },
+    /// Read-only breakdown of a running process's committed memory
+    Memmap {
+        pid: u32,
+        #[arg(long, default_value_t = 15)]
+        top: usize,
+    },
+    /// Read-only: summarize a memory block of a running process (zero ratio, top strings)
+    Peek {
+        pid: u32,
+        /// Address, hex with 0x prefix
+        addr: String,
+        /// Bytes to read
+        #[arg(long, default_value_t = 4 << 20)]
+        len: usize,
+    },
     /// Download every published file from a file server, verify SHA-1, report throughput
     BenchDownload {
         #[command(flatten)]
@@ -241,6 +256,47 @@ fn main() -> Result<()> {
                     esc.push(c);
                 }
                 println!("fileserver_add \"{esc}\" \"{}\"", url.trim_end_matches('/'));
+            }
+        }
+        Cmd::Memmap { pid, top } => {
+            let m = fxs_probe::memmap(pid).map_err(anyhow::Error::msg)?;
+            let mb = |b: u64| b as f64 / 1048576.0;
+            println!("committed {:.0} MiB: private {:.0}, image {:.0}, mapped {:.0}; reserved-only {:.0} MiB", mb(m.committed_total), mb(m.private_total), mb(m.image_total), mb(m.mapped_total), mb(m.reserved_total));
+            println!("\nprivate commit by allocation size:");
+            for (n, b, c) in &m.private_buckets {
+                println!("  {n:<16} {:>8.1} MiB in {c} allocations", mb(*b));
+            }
+            println!("\nlargest private allocations:");
+            for (base, sz, res) in m.private_allocs.iter().take(top) {
+                println!("  0x{base:016x} {:>8.1} MiB committed {:>8.1} MiB reserved ({} bytes)", mb(*sz), mb(*res), sz);
+            }
+            if let Ok(r) = fxs_probe::residency(pid) {
+                println!("\nprivate memory, committed vs resident (physically in RAM):");
+                println!("  total            {:>8.1} MiB committed {:>8.1} MiB resident", mb(r.private_committed), mb(r.private_resident));
+                println!("  NT heap segments {:>8.1} MiB committed {:>8.1} MiB resident ({} segments)", mb(r.heap_segments_committed), mb(r.heap_segments_resident), r.heap_segments);
+                println!("  other            {:>8.1} MiB committed {:>8.1} MiB resident", mb(r.other_committed), mb(r.other_resident));
+                println!("  largest:");
+                for (b, c, res, heap) in r.allocs.iter().take(top) {
+                    println!("    0x{b:016x} {:>7.1} MiB committed {:>7.1} MiB resident{}", mb(*c), mb(*res), if *heap { "  heap segment" } else { "" });
+                }
+            }
+            println!("\nimages (committed, writable):");
+            for g in m.images.iter().take(top) {
+                println!("  {:<40} {:>7.1} {:>7.1} MiB", g.label, mb(g.committed), mb(g.private_writable));
+            }
+            println!("\nmapped:");
+            for g in m.mapped.iter().take(top) {
+                println!("  {:<40} {:>7.1} MiB in {} regions", g.label, mb(g.committed), g.regions);
+            }
+        }
+        Cmd::Peek { pid, addr, len } => {
+            let a = u64::from_str_radix(addr.trim_start_matches("0x"), 16).context("address")?;
+            let d = fxs_probe::peek(pid, a, len).map_err(anyhow::Error::msg)?;
+            let zeros = d.iter().filter(|&&b| b == 0).count();
+            println!("read {} bytes, {:.1}% zero", d.len(), zeros as f64 * 100.0 / d.len() as f64);
+            println!("first 64: {}", hex::encode(&d[..64.min(d.len())]));
+            for (s, n) in fxs_probe::strings_summary(&d, 6, 25) {
+                println!("  {n:>6}x {s}");
             }
         }
         Cmd::BenchDownload { r, url, concurrency } => bench(&r, &url, concurrency)?,

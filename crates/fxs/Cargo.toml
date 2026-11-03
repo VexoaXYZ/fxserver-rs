@@ -10,6 +10,7 @@ fxs-manifest = { path = "../fxs-manifest" }
 fxs-scan = { path = "../fxs-scan" }
 fxs-assets = { path = "../fxs-assets" }
 fxs-fileserver = { path = "../fxs-fileserver" }
+fxs-probe = { path = "../fxs-probe" }
 anyhow.workspace = true
 clap.workspace = true
 rayon.workspace = true
