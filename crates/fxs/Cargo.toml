@@ -1,0 +1,25 @@
+[package]
+name = "fxs"
+description = "fxserver-rs command line: scan, warm FXServer's asset cache, serve files, benchmark"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fxs-manifest = { path = "../fxs-manifest" }
+fxs-scan = { path = "../fxs-scan" }
+fxs-assets = { path = "../fxs-assets" }
+fxs-fileserver = { path = "../fxs-fileserver" }
+anyhow.workspace = true
+clap.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+axum.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
+futures = "0.3"
+sha1.workspace = true
+hex.workspace = true

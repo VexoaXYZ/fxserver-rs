@@ -1,0 +1,23 @@
+[package]
+name = "fxs-fileserver"
+description = "External file server for FXServer's fileserver_add, serving exactly what FXServer published"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fxs-assets = { path = "../fxs-assets" }
+fxs-scan = { path = "../fxs-scan" }
+axum.workspace = true
+tokio.workspace = true
+tokio-util = { version = "0.7", features = ["io"] }
+tracing.workspace = true
+anyhow.workspace = true
+percent-encoding = "2"
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
