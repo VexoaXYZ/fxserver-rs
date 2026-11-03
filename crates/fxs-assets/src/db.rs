@@ -88,4 +88,12 @@ mod tests {
         assert_eq!(db.encode(), s.to_vec());
         assert_eq!(FileDb::default().encode(), b"[]");
     }
+
+    #[test]
+    fn missing_file_sentinel_matches_fxserver() {
+        // as written by FXServer for an `@other/file` client file entry
+        let fx = br#"[{"n":"Z:/r/resources//x/@rivo_fx/init.lua","mt":0,"s":18446744073709551615,"i":"AAAAAAAAAAAAAAAAAAAAAA=="}]"#;
+        let db = FileDb::snapshot(["Z:/r/resources//x/@rivo_fx/init.lua".to_string()], |p| FileStamp::of(std::path::Path::new(p)));
+        assert_eq!(db.encode(), fx.to_vec());
+    }
 }

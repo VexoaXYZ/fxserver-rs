@@ -125,7 +125,7 @@ impl HashIndex {
                 return;
             }
             let stamp = self.stamp(p);
-            if stamp == FileStamp::default() {
+            if stamp == FileStamp::MISSING {
                 return;
             }
             if let Some(i) = self.map.read().unwrap().get(p) {

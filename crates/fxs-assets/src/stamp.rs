@@ -1,6 +1,8 @@
 //! File identity as FXServer's `ResourceFileDatabase::GetEntry` records it:
 //! 128-bit file id (Windows `FILE_ID_INFO.FileId`, POSIX `st_ino`), mtime in
-//! whole Unix seconds, and length. A file that cannot be opened is all zeros.
+//! whole Unix seconds, and length. A file that cannot be opened is recorded as
+//! mtime 0, size u64::MAX, id zero: what FXServer writes (seen in real caches
+//! for `@other/file` references in client file lists).
 
 use std::fs::File;
 use std::path::Path;
@@ -13,15 +15,17 @@ pub struct FileStamp {
 }
 
 impl FileStamp {
+    pub const MISSING: FileStamp = FileStamp { id: [0; 16], mtime: 0, size: u64::MAX };
+
     pub fn of(path: &Path) -> FileStamp {
         let Ok(f) = File::open(path) else {
-            return FileStamp::default();
+            return FileStamp::MISSING;
         };
         let Ok(meta) = f.metadata() else {
-            return FileStamp::default();
+            return FileStamp::MISSING;
         };
         if meta.is_dir() {
-            return FileStamp::default();
+            return FileStamp::MISSING;
         }
         FileStamp { id: file_id(&f, &meta), mtime: mtime(&meta), size: meta.len() }
     }
