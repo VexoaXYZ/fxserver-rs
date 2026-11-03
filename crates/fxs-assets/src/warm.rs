@@ -82,6 +82,10 @@ impl Warmer<'_> {
             client_files: 0,
             note: None,
         };
+        if r.system {
+            res.note = Some("system resource: left to FXServer".into());
+            return res;
+        }
         if resource::is_escrowed(&r.dir) {
             res.note = Some("escrowed (.fxap): left to FXServer".into());
             return res;

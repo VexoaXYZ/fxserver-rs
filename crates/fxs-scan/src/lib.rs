@@ -4,6 +4,8 @@
 //!
 //! Manifests are then evaluated in parallel, which FXServer does serially.
 
+pub mod deps;
+
 use fxs_manifest::{Manifest, ManifestError};
 use rayon::prelude::*;
 use std::collections::{HashSet, VecDeque};
@@ -20,6 +22,8 @@ pub struct Resource {
     pub dir: PathBuf,
     /// `[category]` components between the scan root and the resource.
     pub categories: Vec<String>,
+    /// Found under FXServer's `citizen/system_resources` rather than `resources/`.
+    pub system: bool,
     pub manifest: Result<Manifest, ManifestError>,
 }
 
@@ -37,6 +41,10 @@ pub struct ScanOptions {
     /// FXServer's server root as it formats it: forward slashes, trailing slash.
     pub fx_root: String,
     pub use_system_chat: bool,
+    /// FXServer's `citizen` folder: (path string as FXServer formats it, with
+    /// trailing slash; folder on disk). Its `system_resources` are scanned
+    /// after `resources/`, as FXServer does.
+    pub citizen: Option<(String, PathBuf)>,
 }
 
 impl ScanOptions {
@@ -45,7 +53,9 @@ impl ScanOptions {
         if !s.ends_with('/') {
             s.push('/');
         }
-        Self { fx_root: s, use_system_chat: false }
+        let citizen = root.join("bin").join("citizen");
+        let citizen = citizen.join("system_resources").is_dir().then(|| (format!("{s}bin/citizen/"), citizen));
+        Self { fx_root: s, use_system_chat: false, citizen }
     }
 }
 
@@ -57,11 +67,17 @@ pub fn scan(root: &Path, opts: &ScanOptions) -> ScanReport {
     let t0 = Instant::now();
     let mut report = ScanReport::default();
     let mut seen = HashSet::new();
-    let mut found: Vec<(String, String, PathBuf, Vec<String>)> = Vec::new();
+    let mut found: Vec<(String, String, PathBuf, Vec<String>, bool)> = Vec::new();
 
-    // (fx path, disk path, categories)
+    // (fx path, disk path, categories, system root). FXServer finishes the
+    // user root before it scans system_resources, so user copies win.
+    let mut roots = vec![(format!("{}resources/", opts.fx_root), root.join("resources"), false)];
+    if let Some((fx, disk)) = &opts.citizen {
+        roots.push((format!("{fx}system_resources/"), disk.join("system_resources"), true));
+    }
+    for (root_fx, root_disk, system) in roots {
     let mut queue: VecDeque<(String, PathBuf, Vec<String>)> = VecDeque::new();
-    queue.push_back((format!("{}resources/", opts.fx_root), root.join("resources"), Vec::new()));
+    queue.push_back((root_fx, root_disk, Vec::new()));
 
     while let Some((fx, disk, cats)) = queue.pop_front() {
         let Ok(rd) = std::fs::read_dir(&disk) else { continue };
@@ -70,10 +86,11 @@ pub fn scan(root: &Path, opts: &ScanOptions) -> ScanReport {
             if name == "." || name == ".." || name == ".git" {
                 continue;
             }
-            if name == "chat" && opts.use_system_chat {
+            // system chat is used only with resources_useSystemChat
+            if name == "chat" && opts.use_system_chat != system {
                 continue;
             }
-            if name == "yarn" || name == "webpack" {
+            if !system && (name == "yarn" || name == "webpack") {
                 continue;
             }
             let path = ent.path();
@@ -97,17 +114,18 @@ pub fn scan(root: &Path, opts: &ScanOptions) -> ScanReport {
                 report.duplicates.push((name, path));
                 continue;
             }
-            found.push((name, child_fx, path, cats.clone()));
+            found.push((name, child_fx, path, cats.clone(), system));
         }
+    }
     }
     report.walk_time = t0.elapsed();
 
     let t1 = Instant::now();
     report.resources = found
         .into_par_iter()
-        .map(|(name, fx_path, dir, categories)| {
+        .map(|(name, fx_path, dir, categories, system)| {
             let manifest = fxs_manifest::load(&dir);
-            Resource { name, fx_path, dir, categories, manifest }
+            Resource { name, fx_path, dir, categories, system, manifest }
         })
         .collect();
     report.manifest_time = t1.elapsed();
@@ -129,7 +147,7 @@ mod tests {
         for p in ["resources/[a]/one", "resources/[a]/[b]/two", "resources/three", "resources/[c]/three"] {
             fs::write(r.join(p).join("fxmanifest.lua"), "fx_version 'cerulean'\ngame 'gta5'\n").unwrap();
         }
-        let opts = ScanOptions { fx_root: "R:/srv/".into(), use_system_chat: false };
+        let opts = ScanOptions { fx_root: "R:/srv/".into(), use_system_chat: false, citizen: None };
         let rep = scan(r, &opts);
         let mut names: Vec<_> = rep.resources.iter().map(|r| r.name.as_str()).collect();
         names.sort();

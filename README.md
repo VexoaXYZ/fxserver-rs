@@ -43,7 +43,10 @@ FXServer already supports, and never touches licensing, auth or escrow.
 | `fxs warm <root> --compare` | none (verification) | Recomputes everything and diffs it against FXServer's current cache, writing nothing. |
 | `fxs serve <root>` | FXServer's `/files` handler for client downloads | Serves FXServer's published bytes (never rebuilt, so hashes always match) for `fileserver_add`. Adds ETag, `If-None-Match`, `Range`. Refuses escrowed resources. |
 | `fxs fileserver-cfg <root> <url>` | none | Prints exact-name `fileserver_add` lines for non-escrowed resources only. |
-| `fxs scan <root>` | FXServer's resource scan | Same discovery rules, manifests evaluated in parallel. |
+| `fxs scan <root>` | FXServer's resource scan | Same discovery rules (`resources/`, then `citizen/system_resources`), manifests evaluated in parallel. `--list` prints folders and escrow flags. |
+| `fxs watch <root>` | FXServer's rebuild on next start | Watches `resources/` and re-warms only the resources whose files changed, while you edit. |
+| `fxs deps <root>` | FXServer's dependency loader errors at start time | Missing dependencies (both `dependency` and `dependencies` forms), cycles, broken `@resource/file` references. `--order` prints FXServer's start order. Exits 1 on any issue, for CI or a pre-boot gate. |
+| `fxs memmap <pid>`, `fxs peek <pid> <addr>` | none (diagnosis) | Read-only memory breakdown of a running FXServer. |
 | `fxs bench-download <root> <url>` | none | Downloads every published file and verifies its SHA-1. |
 
 `--cfg server.cfg` limits any command to resources the cfg starts (follows
@@ -186,7 +189,7 @@ Done: asset pipeline (scan, manifests, hashing, caches, RPF2), file serving,
 memory probe, boot-verified cache compatibility, per-runtime RAM costs.
 
 Next candidates, all of which can run next to stock FXServer:
-1. Incremental re-warm on file change during development.
+1. Done since: incremental re-warm (`fxs watch`) and dependency checks (`fxs deps`).
 2. A `getConfiguration`-shaped manifest dump and a resource dependency graph, for tooling and CI.
 3. Memory profiling of FXServer with the real resource set, to find where RAM goes (script runtimes and state sync are the likely large parts).
 4. Rust-side services resources already call over HTTP or exports (DB pooling and similar).
