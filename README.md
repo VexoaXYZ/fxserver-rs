@@ -80,9 +80,26 @@ Caveats, stated plainly:
   a measurement of FXServer itself.
 - FXServer's own `/files` throughput could not be measured: it answers 403 to
   anything that is not a connected client.
-- No FXServer boot was run against a warmed cache in this work. Acceptance
-  rests on the byte-identical output above and a port of FXServer's own
-  freshness rules.
+
+### Real FXServer boots against an fxs-built cache
+
+Separate test root on its own port, 18 resources (989 MiB of stream files),
+licensed, FXServer v1.0.0.35265 win32, three alternating pairs:
+
+| Run | fxs warm | FXServer ready (all 18 started) | Cache files FXServer rewrote |
+|---|---|---|---|
+| FXServer builds its own cache | | 1968, 2136, 1950 ms | |
+| `fxs warm` from scratch, then boot | 978, 1211, 899 ms | 1628, 2222, 1547 ms | **0, 0, 0** |
+| One stream file changed, `fxs warm` with its index | 262 ms (1 file hashed, 7,655 reused) | 1695 ms | |
+
+- FXServer accepts the fxs-built cache as current: it rewrote nothing in
+  any of the three runs. The first boot test caught one bug, which this
+  check confirmed fixed: FXServer stamps an unopenable `@other/file` entry
+  as `mt 0, s u64::MAX`, not all zeros.
+- With 18 resources and hot page cache, hashing is not what makes this
+  server's boot slow; ready time is ~1.5 to 2 s either way. The win scales
+  with stream size, cold disks and frequent asset edits (FXServer rehashes
+  the whole resource; fxs hashes the changed file only).
 
 ## Memory: what FXServer's RAM number actually is
 
@@ -100,6 +117,18 @@ Live Rivo server (28 resources started, 156 scanned, idle, no players):
 | One 128 MiB block (contains event/state bag names, likely a net buffer, UNCONFIRMED) | 128 MiB | 3.9 MiB |
 | Four 32 MiB blocks | 128 MiB | 4 MiB total |
 | Process working set | | 124 MB |
+
+Cost per script runtime, measured by booting the test root with and without
+the one resource that needs it (30 s settle, private memory resident):
+
+| Change | Resident private | Private bytes | Working set |
+|---|---|---|---|
+| Baseline, 18 resources | 113 MiB | 480 MB | 177 MB |
+| Without vMenu (the only C# resource, so no Mono) | 81.5 MiB (**-32 MiB**) | 463 MB | 143 MB |
+| `oxmysql` (Node) vs no JS resource | 107 vs 90 MiB (**-17 MiB**) | 406 vs 388 MB | 167 vs 147 MB |
+
+The cheapest RAM cut on this server is the Mono runtime: if vMenu is the
+only C# resource, a Lua menu saves about 32 MiB resident.
 
 What this means:
 - The "908 MB private bytes" figure is mostly commit charge for
@@ -153,10 +182,11 @@ only filters casual scrapers.
 
 ## Roadmap to a fuller Rust server
 
-Done: asset pipeline (scan, manifests, hashing, caches, RPF2), file serving.
+Done: asset pipeline (scan, manifests, hashing, caches, RPF2), file serving,
+memory probe, boot-verified cache compatibility, per-runtime RAM costs.
 
 Next candidates, all of which can run next to stock FXServer:
-1. Resource-start preflight inside the run script, with incremental re-warm on file change.
+1. Incremental re-warm on file change during development.
 2. A `getConfiguration`-shaped manifest dump and a resource dependency graph, for tooling and CI.
 3. Memory profiling of FXServer with the real resource set, to find where RAM goes (script runtimes and state sync are the likely large parts).
 4. Rust-side services resources already call over HTTP or exports (DB pooling and similar).

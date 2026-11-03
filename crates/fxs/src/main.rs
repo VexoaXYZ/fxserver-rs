@@ -34,7 +34,13 @@ struct RootArgs {
 #[derive(Subcommand)]
 enum Cmd {
     /// Discover resources and evaluate manifests, report timing
-    Scan(RootArgs),
+    Scan {
+        #[command(flatten)]
+        r: RootArgs,
+        /// Print name, escrow flag and folder for every selected resource
+        #[arg(long)]
+        list: bool,
+    },
     /// Pre-build FXServer's cache/files so the next start skips hashing and packing
     Warm {
         #[command(flatten)]
@@ -169,7 +175,7 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
     let cli = Cli::parse();
     match cli.cmd {
-        Cmd::Scan(a) => {
+        Cmd::Scan { r: a, list } => {
             let opts = scan_opts(&a);
             let rep = fxs_scan::scan(&a.root, &opts);
             let sel = select(&a, &rep.resources);
@@ -180,6 +186,11 @@ fn main() -> Result<()> {
             println!("duplicates   {}", rep.duplicates.len());
             println!("walk         {:?}", rep.walk_time);
             println!("manifests    {:?} (parallel)", rep.manifest_time);
+            if list {
+                for x in &sel {
+                    println!("{}\t{}\t{}", x.name, if fxs_assets::resource::is_escrowed(&x.dir) { "escrowed" } else { "open" }, x.dir.display());
+                }
+            }
         }
         Cmd::Warm { r, compare, verbose } => {
             let opts = scan_opts(&r);
