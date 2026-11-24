@@ -1,0 +1,24 @@
+[package]
+name = "fxs-assets"
+description = "FXServer-compatible stream hashing, cache databases and RPF2 client packages"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fxs-manifest = { path = "../fxs-manifest" }
+fxs-scan = { path = "../fxs-scan" }
+sha1 = { workspace = true }
+hex.workspace = true
+base64 = "0.22"
+serde.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+tempfile = "3"
